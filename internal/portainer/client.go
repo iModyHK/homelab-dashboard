@@ -82,7 +82,7 @@ func New(baseURL string, keySource func() string) *Client {
 
 func (c *Client) Status(ctx context.Context) (Status, error) {
 	var out Status
-	err := c.getJSON(ctx, "/api/status", nil, &out)
+	err := c.getJSON(ctx, "/api/system/status", nil, &out)
 	return out, err
 }
 

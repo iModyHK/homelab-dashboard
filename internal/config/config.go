@@ -53,6 +53,7 @@ type Config struct {
 	Alerts AlertThresholds
 
 	LogErrorPatterns []string
+	AllowedOrigins   []string
 }
 
 type RegistryCredential struct {
@@ -98,6 +99,7 @@ func Load() (*Config, error) {
 		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
 		TelegramChatID:   os.Getenv("TELEGRAM_CHAT_ID"),
 		LogErrorPatterns: envList("LOG_ERROR_PATTERNS", "(?i)error|exception|fatal|panic|traceback"),
+		AllowedOrigins:   envList("ALLOWED_ORIGINS", ""),
 	}
 
 	c.StatsInterval = envDuration("STATS_INTERVAL", 15*time.Second, &errs)
@@ -337,4 +339,8 @@ func redact(s string) string {
 		return "****"
 	}
 	return s[:4] + "****"
+}
+
+func ReloadSecret(key string) (string, error) {
+	return secretValue(key)
 }

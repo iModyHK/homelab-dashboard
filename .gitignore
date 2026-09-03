@@ -1,8 +1,9 @@
 bin/
-web/dist/
+web/dist/*
 web/node_modules/
 deploy/.env
 *.db
 *.db-wal
 *.db-shm
 .DS_Store
+!web/dist/.gitkeep

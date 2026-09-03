@@ -1,7 +1,5 @@
 package store
 
-const schemaVersion = 1
-
 var migrations = []string{
 	`
 CREATE TABLE IF NOT EXISTS meta (

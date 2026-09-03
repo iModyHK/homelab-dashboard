@@ -68,7 +68,7 @@ services:
       HOST_SYS: /host/sys
       GOMEMLIMIT: 80MiB
     ports:
-      - "${DASHBOARD_BIND:-0.0.0.0}:${DASHBOARD_PORT:-8087}:8080"
+      - "${DASHBOARD_BIND:-0.0.0.0}:${DASHBOARD_PORT:-5229}:8080"
     volumes:
       - ${DATA_PATH:-/Volume1/DockerAppsData/homelab-dashboard}:/data
       - /usr:/hostfs/usr:ro

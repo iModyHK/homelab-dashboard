@@ -73,7 +73,7 @@ Check that all services are healthy:
 docker compose ps
 ```
 
-Open `http://<nas-ip>:8087` and sign in with `ADMIN_PASSWORD`. First paint arrives from a single `/api/overview` call and the WebSocket takes over from there.
+Open `http://<nas-ip>:5229` and sign in with `ADMIN_PASSWORD`. First paint arrives from a single `/api/overview` call and the WebSocket takes over from there.
 
 ### Installing through Portainer instead of the CLI
 
@@ -88,14 +88,14 @@ Add a proxy host:
 | Domain | `dash.example.com` |
 | Scheme | `http` |
 | Forward hostname | the NAS LAN IP, for example `192.168.0.17` |
-| Forward port | `8087` or whatever `DASHBOARD_PORT` is set to |
+| Forward port | `5229` or whatever `DASHBOARD_PORT` is set to |
 | Websockets support | on |
 | Block common exploits | on |
 | SSL | your certificate, Force SSL on, HTTP/2 on |
 
 Websockets support is required for live updates. Without it the UI still works but polls the overview every time you navigate.
 
-If NPM runs in a container on the same NAS and you want to keep the dashboard off the LAN entirely, set `DASHBOARD_BIND=127.0.0.1` in `.env` and point NPM at `host.docker.internal:8087`, or attach NPM to the `homelab-dashboard_egress` network and forward to `dashboard:8080`.
+If NPM runs in a container on the same NAS and you want to keep the dashboard off the LAN entirely, set `DASHBOARD_BIND=127.0.0.1` in `.env` and point NPM at `host.docker.internal:5229`, or attach NPM to the `homelab-dashboard_egress` network and forward to `dashboard:8080`.
 
 ## What runs and with what access
 

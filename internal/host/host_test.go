@@ -43,7 +43,7 @@ func TestReadersParseProcFiles(t *testing.T) {
 veth1a: 9999 99 0 0 0 0 0 0 9999 99 0 0 0 0 0 0
 docker0: 123 1 0 0 0 0 0 0 456 4 0 0 0 0 0 0
 `)
-	r := New(dir, dir, dir)
+	r := New(dir, dir)
 
 	cpu, err := r.CPU()
 	if err != nil || cpu.User != 10 || cpu.Idle != 100 || cpu.IOWait != 3 {

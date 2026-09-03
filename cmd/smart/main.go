@@ -31,6 +31,23 @@ type cache struct {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		addr := os.Getenv("SMART_LISTEN")
+		if addr == "" {
+			addr = ":9633"
+		}
+		if strings.HasPrefix(addr, ":") {
+			addr = "127.0.0.1" + addr
+		}
+		client := &http.Client{Timeout: 3 * time.Second}
+		resp, err := client.Get("http://" + addr + "/healthz")
+		if err != nil || resp.StatusCode != http.StatusNoContent {
+			fmt.Fprintln(os.Stderr, "unhealthy")
+			os.Exit(1)
+		}
+		resp.Body.Close()
+		return
+	}
 	interval := 5 * time.Minute
 	if raw := os.Getenv("SMART_INTERVAL"); raw != "" {
 		if d, err := time.ParseDuration(raw); err == nil && d >= 30*time.Second {

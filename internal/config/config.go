@@ -26,7 +26,7 @@ type Config struct {
 	HostSys    string
 	HostRoot   string
 
-	TrackedMounts   []string
+	TrackedMounts   []MountSpec
 	ExcludePatterns []string
 	OwnStack        string
 
@@ -61,6 +61,11 @@ type RegistryCredential struct {
 	Password string
 }
 
+type MountSpec struct {
+	Path  string
+	Label string
+}
+
 type AlertThresholds struct {
 	CPUPercent         float64
 	MemoryPercent      float64
@@ -89,7 +94,7 @@ func Load() (*Config, error) {
 		HostProc:         envString("HOST_PROC", "/host/proc"),
 		HostSys:          envString("HOST_SYS", "/host/sys"),
 		HostRoot:         envString("HOST_ROOT", "/hostfs"),
-		TrackedMounts:    envList("TRACKED_MOUNTS", "/,/Volume1"),
+		TrackedMounts:    parseMounts(envList("TRACKED_MOUNTS", "/hostfs/usr=/,/data=/Volume1")),
 		ExcludePatterns:  envList("EXCLUDE_PATTERNS", ""),
 		OwnStack:         envString("OWN_STACK", "homelab-dashboard"),
 		StatsWorkers:     envInt("STATS_WORKERS", 8, &errs),
@@ -207,8 +212,8 @@ func Load() (*Config, error) {
 		fail("DATA_DIR must be an absolute path")
 	}
 	for _, m := range c.TrackedMounts {
-		if !strings.HasPrefix(m, "/") {
-			fail("TRACKED_MOUNTS entry %q must be an absolute path", m)
+		if !strings.HasPrefix(m.Path, "/") || !strings.HasPrefix(m.Label, "/") {
+			fail("TRACKED_MOUNTS entry %q=%q must use absolute paths", m.Path, m.Label)
 		}
 	}
 
@@ -218,8 +223,18 @@ func Load() (*Config, error) {
 	return c, nil
 }
 
-func (c *Config) HostPath(mount string) string {
-	return filepath.Join(c.HostRoot, mount)
+func parseMounts(entries []string) []MountSpec {
+	out := make([]MountSpec, 0, len(entries))
+	for _, e := range entries {
+		path, label, ok := strings.Cut(e, "=")
+		path = strings.TrimSpace(path)
+		label = strings.TrimSpace(label)
+		if !ok || label == "" {
+			label = path
+		}
+		out = append(out, MountSpec{Path: path, Label: label})
+	}
+	return out
 }
 
 func envString(key, def string) string {

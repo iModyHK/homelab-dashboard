@@ -1,0 +1,129 @@
+name: homelab-dashboard
+
+services:
+  socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    container_name: homelab-dashboard-socket-proxy
+    restart: unless-stopped
+    environment:
+      LOG_LEVEL: warning
+      CONTAINERS: 1
+      IMAGES: 1
+      INFO: 1
+      VERSION: 1
+      EVENTS: 1
+      PING: 1
+      POST: 0
+      ALLOW_START: 0
+      ALLOW_STOP: 0
+      ALLOW_RESTARTS: 0
+      AUTH: 0
+      BUILD: 0
+      COMMIT: 0
+      CONFIGS: 0
+      DISTRIBUTION: 0
+      EXEC: 0
+      GRPC: 0
+      NETWORKS: 0
+      NODES: 0
+      PLUGINS: 0
+      SECRETS: 0
+      SERVICES: 0
+      SESSION: 0
+      SWARM: 0
+      SYSTEM: 0
+      TASKS: 0
+      VOLUMES: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - backend
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:2375/_ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  dashboard:
+    image: ghcr.io/imodyhk/homelab-dashboard:${DASHBOARD_TAG:-latest}
+    build:
+      context: ..
+      target: dashboard
+    container_name: homelab-dashboard
+    restart: unless-stopped
+    depends_on:
+      socket-proxy:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      LISTEN_ADDR: ":8080"
+      DATA_DIR: /data
+      DOCKER_HOST: http://socket-proxy:2375
+      SMART_URL: http://smart:9633
+      HOST_PROC: /host/proc
+      HOST_SYS: /host/sys
+      GOMEMLIMIT: 80MiB
+    ports:
+      - "${DASHBOARD_BIND:-0.0.0.0}:${DASHBOARD_PORT:-8087}:8080"
+    volumes:
+      - ${DATA_PATH:-/Volume1/DockerAppsData/homelab-dashboard}:/data
+      - /usr:/hostfs/usr:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    user: "${PUID:-65532}:${PGID:-65532}"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - backend
+      - egress
+    healthcheck:
+      test: ["CMD", "/dashboard", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  smart:
+    image: ghcr.io/imodyhk/homelab-dashboard-smart:${DASHBOARD_TAG:-latest}
+    build:
+      context: ..
+      target: smart
+    container_name: homelab-dashboard-smart
+    restart: unless-stopped
+    profiles:
+      - smart
+    privileged: true
+    environment:
+      SMART_INTERVAL: ${SMART_INTERVAL:-5m}
+      SMART_DEVICES: ${SMART_DEVICES:-}
+    volumes:
+      - /dev:/dev:ro
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "/smart", "healthcheck"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
+
+networks:
+  backend:
+    driver: bridge
+    internal: true
+  egress:
+    driver: bridge

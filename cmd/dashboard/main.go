@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -29,17 +30,39 @@ import (
 var version = "dev"
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "hash-password" {
-		if err := hashPasswordCommand(); err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		return
+	var err error
+	switch {
+	case len(os.Args) > 1 && os.Args[1] == "hash-password":
+		err = hashPasswordCommand()
+	case len(os.Args) > 1 && os.Args[1] == "healthcheck":
+		err = healthcheckCommand()
+	default:
+		err = run()
 	}
-	if err := run(); err != nil {
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func healthcheckCommand() error {
+	addr := os.Getenv("LISTEN_ADDR")
+	if addr == "" {
+		addr = ":8080"
+	}
+	if strings.HasPrefix(addr, ":") {
+		addr = "127.0.0.1" + addr
+	}
+	client := &http.Client{Timeout: 3 * time.Second}
+	resp, err := client.Get("http://" + addr + "/healthz")
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("healthz returned %d", resp.StatusCode)
+	}
+	return nil
 }
 
 func hashPasswordCommand() error {
@@ -65,6 +88,9 @@ func run() error {
 
 	if err := os.MkdirAll(cfg.DataDir, 0o750); err != nil {
 		return fmt.Errorf("data dir: %w", err)
+	}
+	if err := checkWritable(cfg.DataDir); err != nil {
+		return err
 	}
 	st, err := store.Open(filepath.Join(cfg.DataDir, "dashboard.db"))
 	if err != nil {
@@ -94,7 +120,7 @@ func run() error {
 		}
 		return cfg.PortainerAPIKey
 	})
-	hostReader := host.New(cfg.HostProc, cfg.HostSys, cfg.HostRoot)
+	hostReader := host.New(cfg.HostProc, cfg.HostSys)
 	bus := collector.NewBus()
 	coll := collector.New(cfg, dockerClient, portainerClient, hostReader, st, bus, logger, version)
 
@@ -166,6 +192,18 @@ func run() error {
 		}
 		return err
 	}
+}
+
+func checkWritable(dir string) error {
+	probe := filepath.Join(dir, ".write-probe")
+	f, err := os.OpenFile(probe, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	if err != nil {
+		return fmt.Errorf("data dir %s is not writable by uid %d: %w. Fix with: chown %d:%d <host path>",
+			dir, os.Getuid(), err, os.Getuid(), os.Getgid())
+	}
+	f.Close()
+	os.Remove(probe)
+	return nil
 }
 
 func newLogger(level string) *slog.Logger {

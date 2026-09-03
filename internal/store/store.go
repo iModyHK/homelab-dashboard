@@ -24,7 +24,7 @@ func Open(path string) (*Store, error) {
 		"&_pragma=synchronous(NORMAL)" +
 		"&_pragma=foreign_keys(ON)" +
 		"&_pragma=temp_store(MEMORY)" +
-		"&_pragma=cache_size(-16000)"
+		"&_pragma=cache_size(-4000)"
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)

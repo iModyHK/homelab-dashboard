@@ -1,0 +1,9 @@
+.git
+bin
+web/node_modules
+web/dist
+deploy/.env
+*.db
+*.db-wal
+*.db-shm
+README.md

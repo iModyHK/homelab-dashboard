@@ -84,7 +84,11 @@ func (c *Collector) collectHost(ctx context.Context) {
 	if temp, ok := c.host.CPUTemperature(); ok {
 		hs.CPUTemp = temp
 	}
-	mounts, mountErr := c.host.Mounts(c.cfg.TrackedMounts)
+	probes := make([]host.MountProbe, 0, len(c.cfg.TrackedMounts))
+	for _, m := range c.cfg.TrackedMounts {
+		probes = append(probes, host.MountProbe{Path: m.Path, Label: m.Label})
+	}
+	mounts, mountErr := c.host.Mounts(probes)
 	if mountErr != nil {
 		errs = append(errs, fmt.Errorf("mounts: %w", mountErr))
 	}

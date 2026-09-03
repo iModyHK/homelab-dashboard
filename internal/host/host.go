@@ -14,11 +14,10 @@ import (
 type Reader struct {
 	procPath string
 	sysPath  string
-	rootPath string
 }
 
-func New(procPath, sysPath, rootPath string) *Reader {
-	return &Reader{procPath: procPath, sysPath: sysPath, rootPath: rootPath}
+func New(procPath, sysPath string) *Reader {
+	return &Reader{procPath: procPath, sysPath: sysPath}
 }
 
 type CPUTimes struct {
@@ -229,16 +228,21 @@ type MountUsage struct {
 	Free  uint64
 }
 
-func (r *Reader) Mounts(mounts []string) ([]MountUsage, error) {
+type MountProbe struct {
+	Path  string
+	Label string
+}
+
+func (r *Reader) Mounts(probes []MountProbe) ([]MountUsage, error) {
 	var out []MountUsage
 	var errs []error
-	for _, m := range mounts {
-		u, err := statMount(filepath.Join(r.rootPath, m))
+	for _, p := range probes {
+		u, err := statMount(p.Path)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", m, err))
+			errs = append(errs, fmt.Errorf("%s: %w", p.Label, err))
 			continue
 		}
-		u.Mount = m
+		u.Mount = p.Label
 		out = append(out, u)
 	}
 	return out, errors.Join(errs...)

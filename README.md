@@ -38,8 +38,8 @@ The token inherits your user's permissions. The dashboard only issues GET reques
 ## Install
 
 ```bash
-sudo mkdir -p /Volume1/DockerAppsData/homelab-dashboard
-sudo chown 65532:65532 /Volume1/DockerAppsData/homelab-dashboard
+mkdir -p /Volume1/DockerAppsData/homelab-dashboard
+chown 65532:65532 /Volume1/DockerAppsData/homelab-dashboard
 git clone https://github.com/iModyHK/homelab-dashboard.git /Volume1/DockerAppsData/homelab-dashboard-src
 cd /Volume1/DockerAppsData/homelab-dashboard-src/deploy
 cp .env.example .env

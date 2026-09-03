@@ -37,10 +37,12 @@ The token inherits your user's permissions. The dashboard only issues GET reques
 
 ## Install
 
+TOS ships without git, so fetch the source as a tarball:
+
 ```bash
-mkdir -p /Volume1/DockerAppsData/homelab-dashboard
+mkdir -p /Volume1/DockerAppsData/homelab-dashboard /Volume1/DockerAppsData/homelab-dashboard-src
 chown 65532:65532 /Volume1/DockerAppsData/homelab-dashboard
-git clone https://github.com/iModyHK/homelab-dashboard.git /Volume1/DockerAppsData/homelab-dashboard-src
+curl -sL https://github.com/iModyHK/homelab-dashboard/archive/refs/heads/main.tar.gz | tar xz -C /Volume1/DockerAppsData/homelab-dashboard-src --strip-components=1
 cd /Volume1/DockerAppsData/homelab-dashboard-src/deploy
 cp .env.example .env
 ```
@@ -183,12 +185,12 @@ docker compose start dashboard
 ## Upgrade
 
 ```bash
-cd /Volume1/DockerAppsData/homelab-dashboard-src
-git pull
-cd deploy
-docker compose pull
-docker compose --profile smart up -d
+curl -sL https://github.com/iModyHK/homelab-dashboard/archive/refs/heads/main.tar.gz | tar xz -C /Volume1/DockerAppsData/homelab-dashboard-src --strip-components=1
+cd /Volume1/DockerAppsData/homelab-dashboard-src/deploy
+docker compose --profile smart up -d --build
 ```
+
+The tarball overwrites source files only. Your `deploy/.env` is not part of the archive and stays untouched. If you prefer the prebuilt images, replace the last line with `docker compose pull && docker compose --profile smart up -d`.
 
 Schema migrations run automatically at startup and are forward-only. Take a backup before upgrading across a major version. To pin a version, set `DASHBOARD_TAG` in `.env` to a release tag.
 

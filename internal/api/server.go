@@ -19,17 +19,22 @@ import (
 	"github.com/iModyHK/homelab-dashboard/internal/store"
 )
 
+type Notifier interface {
+	SendTest(ctx context.Context) error
+}
+
 type Server struct {
 	cfg       *config.Config
 	collector *collector.Collector
 	store     *store.Store
 	auth      *auth.Manager
+	notifier  Notifier
 	log       *slog.Logger
 	static    fs.FS
 	hub       *hub
 }
 
-func New(cfg *config.Config, coll *collector.Collector, st *store.Store, am *auth.Manager, static fs.FS, logger *slog.Logger) *Server {
+func New(cfg *config.Config, coll *collector.Collector, st *store.Store, am *auth.Manager, notifier Notifier, static fs.FS, logger *slog.Logger) *Server {
 	h := newHub(coll.Bus(), logger)
 	h.setOrigins(cfg.AllowedOrigins)
 	return &Server{
@@ -37,6 +42,7 @@ func New(cfg *config.Config, coll *collector.Collector, st *store.Store, am *aut
 		collector: coll,
 		store:     st,
 		auth:      am,
+		notifier:  notifier,
 		log:       logger,
 		static:    static,
 		hub:       h,

@@ -2,6 +2,7 @@ package alerts
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -123,6 +124,16 @@ func (e *Engine) deliver(ctx context.Context, n notification) {
 		case <-time.After(delays[attempt]):
 		}
 	}
+}
+
+var ErrNoNotifier = errors.New("no alert channel configured")
+
+func (e *Engine) SendTest(ctx context.Context) error {
+	if e.notifier == nil {
+		return ErrNoNotifier
+	}
+	text := fmt.Sprintf("🔔 <b>test</b> · Homelab Dashboard\nAlert delivery works.\n<i>%s</i>", time.Now().In(e.tz).Format("Mon 02 Jan 15:04"))
+	return e.notifier.Send(ctx, text)
 }
 
 func (e *Engine) enqueue(n notification) {

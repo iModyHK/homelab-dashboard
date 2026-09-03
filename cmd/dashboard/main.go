@@ -36,6 +36,8 @@ func main() {
 		err = hashPasswordCommand()
 	case len(os.Args) > 1 && os.Args[1] == "healthcheck":
 		err = healthcheckCommand()
+	case len(os.Args) > 1 && os.Args[1] == "notify-test":
+		err = notifyTestCommand()
 	default:
 		err = run()
 	}
@@ -43,6 +45,20 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+func notifyTestCommand() error {
+	token, chat := os.Getenv("TELEGRAM_BOT_TOKEN"), os.Getenv("TELEGRAM_CHAT_ID")
+	if token == "" || chat == "" {
+		return errors.New("TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID must be set")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := alerts.NewTelegram(token, chat).Send(ctx, "🔔 <b>test</b> · Homelab Dashboard\nAlert delivery works."); err != nil {
+		return err
+	}
+	fmt.Println("sent")
+	return nil
 }
 
 func healthcheckCommand() error {
@@ -156,7 +172,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	server := api.New(cfg, coll, st, authManager, static, logger)
+	server := api.New(cfg, coll, st, authManager, engine, static, logger)
 	srv := &http.Server{
 		Addr:              cfg.ListenAddr,
 		Handler:           server.Handler(),

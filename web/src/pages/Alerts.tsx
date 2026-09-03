@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { RULE_TITLES } from '../components/AlertBanner'
 import { Badge, Button, Empty, Panel, Spinner } from '../components/ui'
-import { api } from '../lib/api'
+import { api, ApiError } from '../lib/api'
 import { dateTime, relative } from '../lib/format'
 import type { AlertRecord } from '../lib/types'
 import { useDashboard } from '../store/DashboardProvider'
@@ -9,6 +9,21 @@ import { useDashboard } from '../store/DashboardProvider'
 export function Alerts() {
   const { overview, now } = useDashboard()
   const [history, setHistory] = useState<AlertRecord[] | null>(null)
+  const [testState, setTestState] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle')
+  const [testError, setTestError] = useState('')
+
+  const sendTest = async () => {
+    setTestState('sending')
+    setTestError('')
+    try {
+      await api.post('/api/alerts/test')
+      setTestState('sent')
+    } catch (err) {
+      setTestState('failed')
+      setTestError(err instanceof ApiError ? err.message : 'failed')
+    }
+    setTimeout(() => setTestState('idle'), 4000)
+  }
 
   const load = () => api.get<AlertRecord[]>('/api/alerts?limit=200').then(setHistory).catch(() => undefined)
   useEffect(() => {
@@ -47,7 +62,15 @@ export function Alerts() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-semibold tracking-tight">Alerts</h1>
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="text-xl font-semibold tracking-tight">Alerts</h1>
+        <span className="ml-auto flex items-center gap-2">
+          {testError && <span className="text-xs text-red-600 dark:text-red-400">{testError}</span>}
+          <Button small onClick={() => void sendTest()} disabled={testState === 'sending'}>
+            {testState === 'sending' ? 'Sending…' : testState === 'sent' ? 'Sent to Telegram' : testState === 'failed' ? 'Failed' : 'Send test alert'}
+          </Button>
+        </span>
+      </div>
       <Panel title={`Active (${firing.length})`}>{firing.length ? firing.map(row) : <Empty>No active alerts.</Empty>}</Panel>
       <Panel title={`History (${resolved.length})`}>{resolved.length ? resolved.map(row) : <Empty>No resolved alerts yet.</Empty>}</Panel>
     </div>

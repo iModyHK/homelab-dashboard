@@ -1,7 +1,9 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"regexp"
 	"sort"
@@ -11,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/iModyHK/homelab-dashboard/internal/alerts"
 	"github.com/iModyHK/homelab-dashboard/internal/auth"
 	"github.com/iModyHK/homelab-dashboard/internal/collector"
 	"github.com/iModyHK/homelab-dashboard/internal/docker"
@@ -478,6 +481,20 @@ func (s *Server) handleAlertAck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.collector.Bus().Publish("alert_ack", map[string]int64{"id": id, "ackedAt": time.Now().Unix()})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleAlertTest(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	if err := s.notifier.SendTest(ctx); err != nil {
+		if errors.Is(err, alerts.ErrNoNotifier) {
+			writeError(w, http.StatusConflict, "no alert channel configured, set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID")
+			return
+		}
+		writeError(w, http.StatusBadGateway, err.Error())
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 

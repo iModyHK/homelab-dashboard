@@ -118,16 +118,16 @@ func (c *Checker) checkOne(ctx context.Context, image string, localDigests map[s
 		res.Error = "no local digest"
 		return res
 	}
-	remote, err := c.remoteDigest(ctx, ref)
+	remote, err := c.remoteDigests(ctx, ref)
 	if err != nil {
 		res.Error = err.Error()
 		return res
 	}
-	res.RemoteDigest = remote
+	res.RemoteDigest = remote.primary
 	res.LocalDigest = candidates[0]
 	res.UpdateAvailable = true
 	for _, d := range candidates {
-		if d == remote {
+		if remote.contains(d) {
 			res.UpdateAvailable = false
 			res.LocalDigest = d
 			break
@@ -136,43 +136,82 @@ func (c *Checker) checkOne(ctx context.Context, image string, localDigests map[s
 	return res
 }
 
-func (c *Checker) remoteDigest(ctx context.Context, ref Reference) (string, error) {
-	token, _ := c.cachedToken(ref)
-	digest, status, challenge, err := c.headManifest(ctx, ref, token)
-	if err != nil {
-		return "", err
-	}
-	if status == http.StatusUnauthorized && challenge != "" {
-		token, err = c.fetchToken(ctx, ref, challenge)
-		if err != nil {
-			return "", err
-		}
-		digest, status, _, err = c.headManifest(ctx, ref, token)
-		if err != nil {
-			return "", err
-		}
-	}
-	switch status {
-	case http.StatusOK:
-		if digest != "" {
-			return digest, nil
-		}
-		return c.getManifestDigest(ctx, ref, token)
-	case http.StatusNotFound:
-		return "", errors.New("tag not found upstream")
-	case http.StatusUnauthorized, http.StatusForbidden:
-		return "", errors.New("registry denied access")
-	case http.StatusTooManyRequests:
-		return "", errors.New("registry rate limited")
-	default:
-		return "", fmt.Errorf("registry returned %d", status)
-	}
+type remoteManifest struct {
+	primary  string
+	children map[string]bool
 }
 
-func (c *Checker) headManifest(ctx context.Context, ref Reference, token string) (digest string, status int, challenge string, err error) {
+func (m remoteManifest) contains(digest string) bool {
+	return digest == m.primary || m.children[digest]
+}
+
+func (c *Checker) remoteDigests(ctx context.Context, ref Reference) (remoteManifest, error) {
+	token, _ := c.cachedToken(ref)
+	head, err := c.headManifest(ctx, ref, token)
+	if err != nil {
+		return remoteManifest{}, err
+	}
+	if head.status == http.StatusUnauthorized && head.challenge != "" {
+		token, err = c.fetchToken(ctx, ref, head.challenge)
+		if err != nil {
+			return remoteManifest{}, err
+		}
+		head, err = c.headManifest(ctx, ref, token)
+		if err != nil {
+			return remoteManifest{}, err
+		}
+	}
+	switch head.status {
+	case http.StatusOK:
+	case http.StatusNotFound:
+		return remoteManifest{}, errors.New("tag not found upstream")
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return remoteManifest{}, errors.New("registry denied access")
+	case http.StatusTooManyRequests:
+		return remoteManifest{}, errors.New("registry rate limited")
+	default:
+		return remoteManifest{}, fmt.Errorf("registry returned %d", head.status)
+	}
+	digest, body, err := c.getManifest(ctx, ref, token)
+	if err != nil {
+		return remoteManifest{}, err
+	}
+	if head.digest != "" {
+		digest = head.digest
+	}
+	out := remoteManifest{primary: digest, children: map[string]bool{}}
+	if isIndex(head.contentType) {
+		var index struct {
+			Manifests []struct {
+				Digest string `json:"digest"`
+			} `json:"manifests"`
+		}
+		if err := json.Unmarshal(body, &index); err == nil {
+			for _, m := range index.Manifests {
+				if m.Digest != "" {
+					out.children[m.Digest] = true
+				}
+			}
+		}
+	}
+	return out, nil
+}
+
+func isIndex(contentType string) bool {
+	return strings.Contains(contentType, "manifest.list") || strings.Contains(contentType, "image.index")
+}
+
+type headResult struct {
+	digest      string
+	status      int
+	challenge   string
+	contentType string
+}
+
+func (c *Checker) headManifest(ctx context.Context, ref Reference, token string) (headResult, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, ref.ManifestURL(), nil)
 	if err != nil {
-		return "", 0, "", err
+		return headResult{}, err
 	}
 	req.Header.Set("Accept", manifestAccept)
 	if token != "" {
@@ -180,17 +219,22 @@ func (c *Checker) headManifest(ctx context.Context, ref Reference, token string)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return "", 0, "", fmt.Errorf("registry unreachable: %w", redactErr(err))
+		return headResult{}, fmt.Errorf("registry unreachable: %w", redactErr(err))
 	}
 	defer resp.Body.Close()
 	io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
-	return resp.Header.Get("Docker-Content-Digest"), resp.StatusCode, resp.Header.Get("WWW-Authenticate"), nil
+	return headResult{
+		digest:      resp.Header.Get("Docker-Content-Digest"),
+		status:      resp.StatusCode,
+		challenge:   resp.Header.Get("WWW-Authenticate"),
+		contentType: resp.Header.Get("Content-Type"),
+	}, nil
 }
 
-func (c *Checker) getManifestDigest(ctx context.Context, ref Reference, token string) (string, error) {
+func (c *Checker) getManifest(ctx context.Context, ref Reference, token string) (string, []byte, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, ref.ManifestURL(), nil)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	req.Header.Set("Accept", manifestAccept)
 	if token != "" {
@@ -198,21 +242,21 @@ func (c *Checker) getManifestDigest(ctx context.Context, ref Reference, token st
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("registry unreachable: %w", redactErr(err))
+		return "", nil, fmt.Errorf("registry unreachable: %w", redactErr(err))
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("registry returned %d", resp.StatusCode)
-	}
-	if d := resp.Header.Get("Docker-Content-Digest"); d != "" {
-		return d, nil
+		return "", nil, fmt.Errorf("registry returned %d", resp.StatusCode)
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if err != nil {
-		return "", err
+		return "", nil, err
+	}
+	if d := resp.Header.Get("Docker-Content-Digest"); d != "" {
+		return d, body, nil
 	}
 	sum := sha256.Sum256(body)
-	return "sha256:" + hex.EncodeToString(sum[:]), nil
+	return "sha256:" + hex.EncodeToString(sum[:]), body, nil
 }
 
 func (c *Checker) cachedToken(ref Reference) (string, bool) {

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"io/fs"
 	"log/slog"
@@ -77,6 +78,7 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/updates/check", s.handleUpdateCheck)
 			r.Get("/alerts", s.handleAlerts)
 			r.Post("/alerts/{id}/ack", s.handleAlertAck)
+			r.Post("/alerts/test", s.handleAlertTest)
 			r.Get("/events", s.handleEvents)
 			r.Get("/errors", s.handleErrors)
 			r.Get("/live", s.hub.serve)
